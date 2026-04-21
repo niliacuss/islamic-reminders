@@ -1,0 +1,35 @@
+name: Send Islamic Reminder
+
+on:
+  schedule:
+    # Wintertijd (CET, UTC+1) — 10:00 / 15:00 / 20:00 Amsterdam
+    - cron: '0 9 * * *'
+    - cron: '0 14 * * *'
+    - cron: '0 19 * * *'
+    # Zomertijd (CEST, UTC+2) — 10:00 / 15:00 / 20:00 Amsterdam
+    - cron: '0 8 * * *'
+    - cron: '0 13 * * *'
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir requests
+
+      - name: Send reminder
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+        run: python send_reminder.py
