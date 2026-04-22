@@ -11,6 +11,11 @@ A state file (.last_sent.json) records the last (date, slot) that was delivered,
 so if GitHub Actions fires twice within the same slot window the second run skips
 instead of resending.
 
+The message is sent to TELEGRAM_CHAT_ID and, if set, also to TELEGRAM_CHAT_ID_2.
+A partial failure (one recipient succeeds, the other fails) is logged but does not
+fail the script. The script exits 1 only when all send attempts fail. State is
+updated whenever at least one recipient received the message.
+
 FORCE_SEND=1 bypasses both the window check and the state file check, and
 deliberately does NOT update the state file (so manual tests do not interfere
 with the scheduled rotation).
@@ -68,6 +73,27 @@ def save_state(today_iso: str, slot: int) -> None:
     payload = {"date": today_iso, "slot": slot}
     STATE_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     log(f"State file updated: date={today_iso} slot={slot}")
+
+
+def send_to_chat(token: str, chat_id: str, text: str) -> tuple[bool, str | None]:
+    """Send text to a single Telegram chat. Returns (success, error_message)."""
+    try:
+        resp = requests.post(
+            TELEGRAM_API.format(token=token),
+            json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            },
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return False, f"request error: {e}"
+
+    if resp.status_code != 200:
+        return False, f"HTTP {resp.status_code}: {resp.text}"
+    return True, None
 
 
 def main() -> None:
@@ -134,31 +160,34 @@ def main() -> None:
         f"(slot {slot_index}, day {days_since_epoch}, total {len(reminders)})."
     )
 
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         fail("TELEGRAM_BOT_TOKEN environment variable is not set.")
-    if not chat_id:
+
+    primary = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not primary:
         fail("TELEGRAM_CHAT_ID environment variable is not set.")
 
-    try:
-        resp = requests.post(
-            TELEGRAM_API.format(token=token),
-            json={
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": True,
-            },
-            timeout=30,
-        )
-    except requests.RequestException as e:
-        fail(f"Telegram request failed: {e}")
+    recipients = [("primary", primary)]
+    secondary = os.environ.get("TELEGRAM_CHAT_ID_2", "").strip()
+    if secondary:
+        recipients.append(("secondary", secondary))
 
-    if resp.status_code != 200:
-        fail(f"Telegram API returned HTTP {resp.status_code}: {resp.text}")
+    log(f"Sending to {len(recipients)} recipient(s).")
 
-    log("Reminder sent successfully.")
+    successes = 0
+    for label, chat_id in recipients:
+        ok, err = send_to_chat(token, chat_id, text)
+        if ok:
+            log(f"Sent to {label}.")
+            successes += 1
+        else:
+            log(f"WARNING: send to {label} failed — {err}")
+
+    if successes == 0:
+        fail(f"All {len(recipients)} send attempt(s) failed.")
+
+    log(f"Delivered to {successes}/{len(recipients)} recipient(s).")
 
     if not force:
         save_state(today_iso, slot_index)
