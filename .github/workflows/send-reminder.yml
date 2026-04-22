@@ -2,15 +2,22 @@ name: Send Islamic Reminder
 
 on:
   schedule:
-    # Wintertijd (CET, UTC+1) — 10:00 / 15:00 / 20:00 Amsterdam
+    # Wintertijd (CET, UTC+1) — ~10:00 / 15:00 / 20:00 Amsterdam
     - cron: '0 9 * * *'
     - cron: '0 14 * * *'
     - cron: '0 19 * * *'
-    # Zomertijd (CEST, UTC+2) — 10:00 / 15:00 / 20:00 Amsterdam
+    # Zomertijd (CEST, UTC+2) — ~10:00 / 15:00 / 20:00 Amsterdam
     - cron: '0 8 * * *'
     - cron: '0 13 * * *'
     - cron: '0 18 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: send-reminder
+  cancel-in-progress: false
 
 jobs:
   send:
@@ -33,3 +40,15 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: python send_reminder.py
+
+      - name: Commit state file
+        run: |
+          if [[ -n "$(git status --porcelain .last_sent.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .last_sent.json
+            git commit -m "chore: update .last_sent.json [skip ci]"
+            git push
+          else
+            echo "No changes to .last_sent.json — nothing to commit."
+          fi

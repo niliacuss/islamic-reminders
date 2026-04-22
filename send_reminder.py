@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
-"""Send an Islamic reminder to Telegram based on the current Europe/Amsterdam time."""
+"""Send an Islamic reminder to Telegram based on the current Europe/Amsterdam time.
+
+Slot windows (tolerant of GitHub Actions cron delays):
+- Hour 10-14  -> slot 0 (10u reminder)
+- Hour 15-19  -> slot 1 (15u reminder)
+- Hour 20-23  -> slot 2 (20u reminder)
+- Hour 0-9    -> skip (pre-morning window)
+
+A state file (.last_sent.json) records the last (date, slot) that was delivered,
+so if GitHub Actions fires twice within the same slot window the second run skips
+instead of resending.
+
+FORCE_SEND=1 bypasses both the window check and the state file check, and
+deliberately does NOT update the state file (so manual tests do not interfere
+with the scheduled rotation).
+"""
 from __future__ import annotations
 
 import html
@@ -13,8 +28,9 @@ from zoneinfo import ZoneInfo
 import requests
 
 AMSTERDAM = ZoneInfo("Europe/Amsterdam")
-SLOT_HOURS = {10: 0, 15: 1, 20: 2}
-REMINDERS_PATH = Path(__file__).parent / "reminders.json"
+SCRIPT_DIR = Path(__file__).parent
+REMINDERS_PATH = SCRIPT_DIR / "reminders.json"
+STATE_PATH = SCRIPT_DIR / ".last_sent.json"
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 
 
@@ -27,13 +43,31 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
-def pick_slot_for_force(hour: int) -> int:
-    """When manually triggered, map the current hour to the closest regular slot."""
-    if hour < 13:
+def slot_for_hour(hour: int) -> int | None:
+    """Return the active slot for an Amsterdam hour, or None if outside the window."""
+    if 10 <= hour <= 14:
         return 0
-    if hour < 18:
+    if 15 <= hour <= 19:
         return 1
-    return 2
+    if 20 <= hour <= 23:
+        return 2
+    return None
+
+
+def load_state() -> dict:
+    if not STATE_PATH.exists():
+        return {}
+    try:
+        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        log(f"Warning: could not read {STATE_PATH.name} ({e}); treating as empty.")
+        return {}
+
+
+def save_state(today_iso: str, slot: int) -> None:
+    payload = {"date": today_iso, "slot": slot}
+    STATE_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    log(f"State file updated: date={today_iso} slot={slot}")
 
 
 def main() -> None:
@@ -42,15 +76,31 @@ def main() -> None:
 
     force = os.environ.get("FORCE_SEND") == "1"
 
-    if force:
-        slot_index = pick_slot_for_force(now.hour)
-        log(f"FORCE_SEND=1 — bypassing hour check, using slot {slot_index}.")
-    else:
-        slot_index = SLOT_HOURS.get(now.hour)
-        if slot_index is None:
+    slot_index = slot_for_hour(now.hour)
+    if slot_index is None:
+        if force:
+            slot_index = 0
             log(
-                f"Hour {now.hour} is not a reminder slot (10/15/20). "
-                "Exiting cleanly to avoid duplicate sends."
+                f"FORCE_SEND=1 — hour {now.hour} is outside the active window "
+                "(10-23); defaulting to slot 0."
+            )
+        else:
+            log(
+                f"Hour {now.hour} is outside the active window (10-23). "
+                "Exiting cleanly."
+            )
+            return
+
+    today_iso = now.date().isoformat()
+
+    if force:
+        log("FORCE_SEND=1 — skipping state file check, will not update state.")
+    else:
+        state = load_state()
+        if state.get("date") == today_iso and state.get("slot") == slot_index:
+            log(
+                f"Slot {slot_index} for {today_iso} was already sent "
+                f"(per {STATE_PATH.name}). Exiting cleanly."
             )
             return
 
@@ -109,6 +159,9 @@ def main() -> None:
         fail(f"Telegram API returned HTTP {resp.status_code}: {resp.text}")
 
     log("Reminder sent successfully.")
+
+    if not force:
+        save_state(today_iso, slot_index)
 
 
 if __name__ == "__main__":
