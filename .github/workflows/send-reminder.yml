@@ -2,16 +2,17 @@ name: Send Islamic Reminder
 
 on:
   schedule:
-    # Elk uur op minuut 7 (off-peak — minuut 0 is de drukste minuut bij
-    # GitHub Actions, daar lopen vertragingen op tot 30+ minuten).
+    # Elke 15 min op minuten 7, 22, 37, 52 (off-peak — vermijdt minuut 0
+    # en de quarter-marks 15/30/45 die ook hoge belasting krijgen).
+    # GitHub Actions skipt regelmatig hele cron-triggers tijdens piek;
+    # daarom 4 kansen per uur, ~16-20 firings per slot-venster.
     # UTC 8-22 dekt alle Amsterdam slot-vensters in zowel CET als CEST:
     #   slot 0 (10-14u Ams)  → UTC 8-13 (zomer) / 9-13 (winter)
     #   slot 1 (15-19u Ams)  → UTC 13-17 (zomer) / 14-18 (winter)
     #   slot 2 (20-23u Ams)  → UTC 18-21 (zomer) / 19-22 (winter)
-    # Per slot zijn er dus 4-5 kansen; .last_sent.json zorgt dat maar
-    # één run daadwerkelijk verstuurt. Cron-trigger overgeslagen door
-    # GitHub? De volgende uurpoging vangt het op binnen het slot-venster.
-    - cron: '7 8-22 * * *'
+    # .last_sent.json dedupliceert: alleen de eerste succesvolle run per
+    # slot stuurt daadwerkelijk; de rest exit cleanly binnen seconden.
+    - cron: '7,22,37,52 8-22 * * *'
   workflow_dispatch:
 
 permissions:
