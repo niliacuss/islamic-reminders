@@ -1,18 +1,22 @@
 name: Send Islamic Reminder
 
 on:
+  # Primair pad: externe scheduler (cron-job.org) belt de GitHub API en
+  # triggert dit event om 10:00, 15:00 en 20:00 Amsterdam. Cron-job.org
+  # heeft een eigen reliable scheduler (~60s accuracy) die niet onder
+  # GitHub Actions' load valt.
+  repository_dispatch:
+    types: [send-reminder]
+
+  # Backup pad: GitHub's eigen cron blijft draaien als safety net voor
+  # als cron-job.org zelf een keer uitvalt. .last_sent.json dedupliceert:
+  # als cron-job.org al succesvol heeft verstuurd, exit GitHub's cron-run
+  # binnen seconden zonder een tweede bericht te sturen.
   schedule:
-    # Elke 15 min op minuten 7, 22, 37, 52 (off-peak — vermijdt minuut 0
-    # en de quarter-marks 15/30/45 die ook hoge belasting krijgen).
-    # GitHub Actions skipt regelmatig hele cron-triggers tijdens piek;
-    # daarom 4 kansen per uur, ~16-20 firings per slot-venster.
-    # UTC 8-22 dekt alle Amsterdam slot-vensters in zowel CET als CEST:
-    #   slot 0 (10-14u Ams)  → UTC 8-13 (zomer) / 9-13 (winter)
-    #   slot 1 (15-19u Ams)  → UTC 13-17 (zomer) / 14-18 (winter)
-    #   slot 2 (20-23u Ams)  → UTC 18-21 (zomer) / 19-22 (winter)
-    # .last_sent.json dedupliceert: alleen de eerste succesvolle run per
-    # slot stuurt daadwerkelijk; de rest exit cleanly binnen seconden.
     - cron: '7,22,37,52 8-22 * * *'
+
+  # Handmatig pad: voor testen vanuit Actions UI. Zet FORCE_SEND=1 zodat
+  # state-file en slot-window check overgeslagen worden.
   workflow_dispatch:
 
 permissions:
