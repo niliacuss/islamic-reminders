@@ -1,123 +1,73 @@
-# Sessie Handover — Islamic Reminders
+# Sessie Handover: Islamic Reminders
 
-**Afsluitdatum:** 2026-06-09 01:09 (Europe/Amsterdam)
+**Afsluitdatum:** 2026-06-28 17:11 (Europe/Amsterdam)
 **Project:** islamic-reminders
 **Repo:** https://github.com/niliacuss/islamic-reminders (PUBLIC)
 **Branch:** `main`
-**Worktree-pad:** `C:\Users\fessa\Documents\Claude\Islam Reminders\islamic-reminders`
-**Laatste commit:** `8d41b82` — "Add 90 reminders for days 181-210 (total 630)"
+**Werkkopie deze sessie:** `D:\Claude\Islam Reminders\islamic-reminders`
+(let op: er bestaat ook een tweede clone op `C:\Users\fessa\Documents\Claude\Islam Reminders\islamic-reminders`, beide volgen dezelfde remote, sync vóór elke sessie)
+**Laatste inhoudelijke commit:** `ced2f93` (opening-polish), plus de handover-commit van deze /close.
 
 ## Eindstatus
 
-- ✅ Productie draait vlekkeloos via cron-job.org (sinds 9 mei 2026, 17+ dagen op rij 3 reminders/dag binnen ~40s)
-- ✅ 630 reminders in `reminders.json` = 210 dagen unieke rotatie
-- ✅ Vanaf vandaag uniek t/m ~21 december 2026
-- ✅ Geen pending changes, alles gepusht naar `main`
-- ✅ Repo is public sinds 8 mei 2026 (onbeperkte gratis Actions)
+- ✅ **VOL JAAR COMPLEET: 1095 reminders in `reminders.json` = 365 dagen unieke rotatie.**
+- ✅ Productie draait vlekkeloos via cron-job.org (3 reminders/dag, `repository_dispatch` naar GitHub Actions naar Telegram).
+- ✅ Dedup over de hele collectie: 0 paren boven 0.40 Jaccard, 0 zelfde-dag rotatie-clusters.
+- ✅ Geen pending changes na deze handover-commit.
 
-## Wat is deze sessie gedaan (chronologisch)
+## Wat is in deze sessie gedaan (chronologisch)
 
-### Fase 1 — Basis (22 april 2026, sessie-start)
-
-- Repo `niliacuss/islamic-reminders` gekloond
-- `send_reminder.py`, workflow YAML, `requirements.txt`, `.gitignore` opgezet
-- 90 originele reminders door user aangeleverd, in `reminders.json` geplaatst
-- Live test bevestigde Telegram delivery werkte (chat ID `5648739789`)
-- Slot-windows (10-14/15-19/20-23) + `.last_sent.json` state-file ingevoerd
-- Multi-recipient support (`TELEGRAM_CHAT_ID_2`) toegevoegd
-
-### Fase 2 — Content uitbreiding (22 april - 26 mei 2026)
-
-- Batch 2: dag 31-60 (90 reminders)
-- Batch 3: dag 61-90
-- Batch 4: dag 91-120
-- Batch 5: dag 121-150
-- Batch 6: dag 151-180
-- Batch 7: dag 181-210
-
-### Fase 3 — Scheduling problemen oplossen (7-8 mei 2026)
-
-- GitHub Actions cron bleek onbetrouwbaar (1-2 reminders gemist per dag)
-- Frequentie eerst verhoogd naar 4×/uur off-peak (`7,22,37,52 8-22 * * *`)
-- Hielp niet voldoende → repo public gemaakt, fine-grained PAT aangemaakt
-- Cron-job.org opgezet (3 jobs, 10/15/20 Europe/Amsterdam)
-- Workflow uitgebreid met `repository_dispatch` event-type `send-reminder`
-
-### Fase 4 — Dedup en stijl (25-26 mei 2026, 9 juni)
-
-- User signaleerde dat hij reminders dubbel had gezien
-- Jaccard token-overlap scan uitgevoerd op alle 540 entries
-- 5 echte duplicaten gevonden + gefixt (Musa-put, Rust-graf, Kronen, Masjid-verlaten, Du'a-dankbaarheid)
-- Batch 7 (90 nieuw) toegevoegd met scan vooraf
-- Eindstand: 0 paren boven Jaccard 0.40 in hele DB
-- Basic-memory notes geschreven (overview, scheduler-evolution, automation-setup, content-database, chat-archief)
-- `UserPromptSubmit` hook in `settings.json` aangemerkt → rapportagestijl met `##` headers + `## Vervolgacties` blok
+1. Hervat via `/resume`; ontdekt dat de cwd (`D:`) een tweede, achterlopende clone was, gesynct met `main` (43 commits achter).
+2. Failure-mail onderzocht: de 20:00-reminder van 27 juni faalde door een tijdelijke Telegram-timeout; de backup schedule-cron leverde hem 37 minuten later alsnog. Geen actie nodig, redundantie werkte.
+3. Content uitgebreid van 630 naar 1095 (vol jaar):
+   - Batch 8 (dagen 211-240, 720 totaal): commit `63cd488`
+   - Batch 9 (241-270, 810): `fa08134`
+   - Batch 10 (271-300, 900): `1348d2e`
+   - Batch 11 (301-330, 990): `e9994a0`, geschreven met 5 parallelle Opus-subagents
+   - Batch 12 + slot (331-365, 1095, vol jaar): `14019d9`, 6 parallelle subagents
+   - Elke batch: schrijven, Jaccard-scan (drempel 0.40), additieve merge, commit, `git pull --rebase`, push.
+4. Kwaliteit-finetune:
+   - Volledige Jaccard-matrix over alle 1095 (`analyze.py`): 1 echt paar boven 0.40 plus 1 getripliceerde du'a gevonden en gefixt. Commit `dbfdba1`.
+   - Opening-variatie polish: 12 entries' openingen gevarieerd tegen zelfde-dag herhaling. Commit `ced2f93`.
+5. `/close` command aangepast: handover nu naar 4 locaties inclusief Obsidian plus gedateerde naam, geldt voor alle code-sessies. Gedocumenteerd in basic-memory `tools/automation/`.
 
 ## Open vragen / wachtende werkzaamheden
 
-- **Batch 8-12 nog te schrijven** — nog ~465 reminders nodig voor vol jaar (1095 = 365 × 3)
-- **Themapool wordt smaller** — alle 99 Namen + de meeste hopeful Quranische beschrijvingen zijn gebruikt; volgende batches leunen op verhalen + concepten + du'a
-- **PAT vervalt over ~11 maanden** (aangemaakt 8 mei 2026, 1-jaars termijn) → vernieuwen voor afloop + cron-job.org headers updaten
+- Vol jaar is bereikt; **geen nieuwe content meer aanbevolen** (themapool uitgeput, zou geforceerd aanvoelen).
+- Optioneel: theologische steekproef van de verhalende subagent-entries uit batch 11-12 (al gecontroleerd tijdens samenvoegen).
+- PAT voor cron-job.org vervalt rond mei 2027: vernieuwen plus headers updaten.
 
 ## Bekende valkuilen geleerd
 
-- **GitHub Actions cron is best-effort** — minuut 0 is drukst; `7,22,37,52` off-peak hielp pas redelijk
-- **Native cron blijft onbetrouwbaar** ook met redundantie → externe scheduler nodig
-- **Cron-job.org PAT-permission:** `Contents: Read and write`, NIET Read-only (Read-only geeft 403 op `/dispatches`)
-- **Repo private = 2000 min/maand limiet** → bij hoge frequentie cron kun je in betaling lopen; public lost dit op
-- **GitHub Actions rondt billable minuten af naar boven** per run, dus 30 sec = 1 minuut
-- **Title/Name-checks vangen geen content-duplicaten** — zelfde hadith met andere titel/woorden glipt door; alleen Jaccard token-overlap scan vangt het
-- **GitHub Actions workflow_run-events kunnen niet schedule events activeren** indien `last commit was a bot commit` — vandaar `[skip ci]` in state-commit
-- **Workflow-edits hebben ~5-15 min propagatie** voor nieuwe schedule actief wordt
-- **Concurrency-groep voorkomt parallel runs** maar serieert ze; bij hoge frequentie kan een queue ontstaan
+- Twee clones (`C:` en `D:`) van dezelfde repo; sync vóór elke sessie, anders werk je in de verkeerde of loop je achter.
+- Subagents: geef ALTIJD exacte thema-seeds. Open-ended "kies zelf N hadiths" liet de slot-agent beroemde, al-bestaande hadiths kiezen (100 delen barmhartigheid, wolken-hadith), die moesten vervangen worden.
+- Productie schrijft `.last_sent.json` bot-commits naar `main`; doe `git pull --rebase` vlak voor elke push.
+- Windows: python via Git Bash kan `/c/`-mountpaden niet openen, gebruik `C:/`-paden; reconfigureer stdout naar utf-8 voor de emoji's.
+
+## Tooling (in scratchpad)
+
+`analyze.py` (volledige Jaccard-matrix plus zelfde-dag clustercheck), `openings.py` (opening-verdeling), `scan.py` (nieuw-vs-bestaand, pas NEW-pad aan per batch), plus backups per tussenstand (630, 720, 810, 900, 990). Pad: `C:\Users\fessa\AppData\Local\Temp\claude\D--Claude-Islam-Reminders\<sessie-id>\scratchpad`.
 
 ## Snel hervatten (volgende sessie)
 
-Plak in een nieuwe Claude Code sessie:
-
 ```
-Lees C:\Users\fessa\Documents\Claude\Islam Reminders\islamic-reminders\SESSIE_HANDOVER.md
-plus basic-memory notes onder projects/islamic-reminders/ en tools/automation/islamic-reminders-automation-setup.
-Dat is de volledige context voor het Islamic Reminders project.
-```
-
-Of voor één specifieke taak (bv. batch 8):
-
-```
-We zijn op 630 reminders, 210 dagen rotatie. Schrijf batch 8 (dagen 211-240, 90 nieuwe reminders).
-Lees eerst de bestaande reminders.json via Jaccard token-overlap scan om duplicaten te voorkomen.
-Discipline staat in basic-memory note "islamic-reminders uniqueness discipline".
+Lees D:\Claude\Islam Reminders\islamic-reminders\SESSIE_HANDOVER.md plus basic-memory
+projects/islamic-reminders/ en de auto-memory islamic_reminders_uniqueness.md. Het
+Islamic Reminders project staat op 1095 reminders (vol jaar). Geen nieuwe content nodig;
+eventueel kwaliteits-finetune of een theologische steekproef van batch 11-12.
 ```
 
-## Belangrijke commands voor de volgende sessie
+## Belangrijke commands
 
 ```bash
-# Werkdirectory
-cd "C:\Users\fessa\Documents\Claude\Islam Reminders\islamic-reminders"
-
-# Status checken
-git log --oneline -5
+cd "D:\Claude\Islam Reminders\islamic-reminders"
+git pull --ff-only origin main
+python -c "import json;print(len(json.load(open('reminders.json',encoding='utf-8'))))"   # 1095
 gh run list --workflow=send-reminder.yml --limit=5
-
-# Recente sends bekijken
-git log --author="github-actions" --pretty=format:"%h %ad" --date=iso-local --since="2 days ago"
-
-# State-file
-cat .last_sent.json
-
-# Reminder count
-python -c "import json; print(len(json.load(open('reminders.json',encoding='utf-8'))))"
 ```
 
 ## Verwante basic-memory notes
 
-- `projects/islamic-reminders/Islamic Reminders - Project Overview`
-- `projects/islamic-reminders/Islamic Reminders - Scheduler Evolution`
-- `projects/islamic-reminders/Islamic Reminders - Content Database`
-- `tools/automation/Islamic Reminders - Automation Setup`
-- `chat-archief/2026-05-26 - islamic-reminders cron-job.org migratie en batch 7`
-
-## Auto-memory pointers
-
-- `~/.claude/projects/C--Users-fessa-Documents-Claude-Islam-Reminders/memory/MEMORY.md`
-- `~/.claude/projects/C--Users-fessa-Documents-Claude-Islam-Reminders/memory/islamic_reminders_uniqueness.md`
+- `projects/islamic-reminders/` (alle sessie- en project-notes)
+- `tools/automation/islamic-reminders-automation-setup` (cron-job.org + Actions + Telegram setup)
+- `tools/automation/close-command-handover-naar-4-locaties-met-obsidian-en-gedateerde-naam` (de /close wijziging van deze sessie)
