@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Send an Islamic reminder to Telegram based on the current Europe/Amsterdam time.
 
-Slot windows (tolerant of GitHub Actions cron delays):
-- Hour 10-14  -> slot 0 (10u reminder)
-- Hour 15-19  -> slot 1 (15u reminder)
-- Hour 20-23  -> slot 2 (20u reminder)
+Slot windows (tolerant of GitHub Actions cron delays), five reminders per day:
+- Hour 10-12  -> slot 0 (10u reminder)
+- Hour 13-15  -> slot 1 (13u reminder)
+- Hour 16-18  -> slot 2 (16u reminder)
+- Hour 19-21  -> slot 3 (19u reminder)
+- Hour 22-23  -> slot 4 (22u reminder)
 - Hour 0-9    -> skip (pre-morning window)
 
 A state file (.last_sent.json) records the last (date, slot) that was delivered,
@@ -33,6 +35,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 AMSTERDAM = ZoneInfo("Europe/Amsterdam")
+SLOTS_PER_DAY = 5  # 10:00, 13:00, 16:00, 19:00, 22:00
 SCRIPT_DIR = Path(__file__).parent
 REMINDERS_PATH = SCRIPT_DIR / "reminders.json"
 STATE_PATH = SCRIPT_DIR / ".last_sent.json"
@@ -50,12 +53,16 @@ def fail(msg: str) -> None:
 
 def slot_for_hour(hour: int) -> int | None:
     """Return the active slot for an Amsterdam hour, or None if outside the window."""
-    if 10 <= hour <= 14:
+    if 10 <= hour <= 12:
         return 0
-    if 15 <= hour <= 19:
+    if 13 <= hour <= 15:
         return 1
-    if 20 <= hour <= 23:
+    if 16 <= hour <= 18:
         return 2
+    if 19 <= hour <= 21:
+        return 3
+    if 22 <= hour <= 23:
+        return 4
     return None
 
 
@@ -143,7 +150,7 @@ def main() -> None:
         fail("reminders.json is empty — add reminder objects before scheduling runs.")
 
     days_since_epoch = (now.date() - date(1970, 1, 1)).days
-    index = ((days_since_epoch * 3) + slot_index) % len(reminders)
+    index = ((days_since_epoch * SLOTS_PER_DAY) + slot_index) % len(reminders)
     reminder = reminders[index]
 
     if not isinstance(reminder, dict):

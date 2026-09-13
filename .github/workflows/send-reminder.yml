@@ -2,7 +2,7 @@ name: Send Islamic Reminder
 
 on:
   # Primair pad: externe scheduler (cron-job.org) belt de GitHub API en
-  # triggert dit event om 10:00, 15:00 en 20:00 Amsterdam. Cron-job.org
+  # triggert dit event om 10:00, 13:00, 16:00, 19:00 en 22:00 Amsterdam. Cron-job.org
   # heeft een eigen reliable scheduler (~60s accuracy) die niet onder
   # GitHub Actions' load valt.
   repository_dispatch:

@@ -1,16 +1,16 @@
 # Islamic Reminders
 
-Geautomatiseerd systeem dat dagelijks om **10:00, 15:00 en 20:00 (Europe/Amsterdam)** een Islamitische reminder naar mijn Telegram stuurt via GitHub Actions.
+Geautomatiseerd systeem dat dagelijks om **10:00, 13:00, 16:00, 19:00 en 22:00 (Europe/Amsterdam)** een Islamitische reminder naar mijn Telegram stuurt via GitHub Actions.
 
 ## Hoe het werkt
 
 - `reminders.json` bevat een array met reminder-objecten (`title` + `body`).
 - `send_reminder.py` bepaalt welke reminder gestuurd wordt via een deterministische index:
 
-      ((dagen_sinds_epoch × 3) + slot_index) % totaal_aantal_reminders
+      ((dagen_sinds_epoch × 5) + slot_index) % totaal_aantal_reminders
 
-  waarbij `slot_index` gelijk is aan `0` voor 10u, `1` voor 15u en `2` voor 20u. Elke reminder komt één keer aan bod voordat de cyclus zich herhaalt, en de volgorde schuift per dag op zodat je niet altijd dezelfde reminder op hetzelfde tijdstip krijgt.
-- GitHub Actions triggert via cron op 10, 15 en 20 uur Amsterdam-tijd. Omdat Amsterdam zomer- en wintertijd heeft staan er **6 cron-entries** (3 voor CET, 3 voor CEST). Het script controleert zelf of de huidige Amsterdam-tijd daadwerkelijk 10/15/20 uur is en exit anders zonder te versturen — dit voorkomt dubbele sends rondom DST.
+  waarbij `slot_index` gelijk is aan `0` voor 10u, `1` voor 13u, `2` voor 16u, `3` voor 19u en `4` voor 22u. Het aantal reminders is een veelvoud van 5, zodat positie `i % 5` altijd hetzelfde tijdslot is. Elke reminder komt één keer aan bod voordat de cyclus zich herhaalt, en de volgorde schuift per dag op zodat je niet altijd dezelfde reminder op hetzelfde tijdstip krijgt.
+- De primaire trigger is [cron-job.org](https://cron-job.org): vijf jobs (10:00, 13:00, 16:00, 19:00, 22:00 Europe/Amsterdam) die een `repository_dispatch` naar GitHub sturen. GitHub's eigen cron (4× per uur) is de backup. Het script leidt het slot af uit het Amsterdam-uur (10-12, 13-15, 16-18, 19-21, 22-23) en `.last_sent.json` voorkomt dubbele sends binnen hetzelfde slot.
 
 ## Reminders toevoegen
 
