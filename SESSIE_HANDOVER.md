@@ -1,6 +1,15 @@
 # Sessie Handover: Islamic Reminders
 
-**Afsluitdatum:** 2026-06-28 17:11 (Europe/Amsterdam)
+## ⚠️ Actuele stand (gecontroleerd 17 oktober 2026)
+
+Alles onder deze sectie is de handover van 28 juni 2026 en is op de kerncijfers achterhaald.
+
+- **`reminders.json`: 550 reminders**, Husn adh-Dhann v3, **5 per dag** (10, 13, 16, 19 en 22 uur; `SLOTS_PER_DAY = 5` in `send_reminder.py`). Dat is 110 dagen unieke inhoud: **13 september t/m 31 december 2026** (commit `49d236b`, 13 september).
+- **Deadline:** de rotatie is `index = (dagen_sinds_1970 * 5 + slot) % len(reminders)`. Na 31 december begint de set dus weer vooraan. Voor januari 2027 zijn 155 nieuwe reminders nodig (5 x 31), aanhechten volgens de v3-werkwijze en daarna opnieuw roteren zodat 1 januari op de eerste nieuwe reminder valt.
+- **Verzending:** cron-job.org stuurt `repository_dispatch` (type `send-reminder`) naar GitHub Actions, met GitHub-cron als vangnet; `.last_sent.json` voorkomt dubbele berichten. Een push start de workflow niet.
+- **Werkkopie:** alleen `D:\Claude\Islam Reminders\islamic-reminders`. De tweede clone op `C:\Users\fessa\Documents\...` bestaat niet meer.
+
+**Afsluitdatum (oude handover):** 2026-06-28 17:11 (Europe/Amsterdam)
 **Project:** islamic-reminders
 **Repo:** https://github.com/niliacuss/islamic-reminders (PUBLIC)
 **Branch:** `main`
@@ -8,7 +17,7 @@
 (let op: er bestaat ook een tweede clone op `C:\Users\fessa\Documents\Claude\Islam Reminders\islamic-reminders`, beide volgen dezelfde remote, sync vóór elke sessie)
 **Laatste inhoudelijke commit:** `ced2f93` (opening-polish), plus de handover-commit van deze /close.
 
-## Eindstatus
+## Eindstatus (28 juni 2026, achterhaald)
 
 - ✅ **VOL JAAR COMPLEET: 1095 reminders in `reminders.json` = 365 dagen unieke rotatie.**
 - ✅ Productie draait vlekkeloos via cron-job.org (3 reminders/dag, `repository_dispatch` naar GitHub Actions naar Telegram).
