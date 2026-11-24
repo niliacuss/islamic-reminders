@@ -29,6 +29,23 @@ Open `reminders.json` en voeg objecten toe aan de array, bijvoorbeeld:
 
 Commit en push — de volgende cron-run pakt de nieuwe set automatisch op. Het systeem werkt met elk aantal reminders (de modulo zorgt dat de index blijft passen).
 
+## Gedateerde reminders (voorrang op de rotatie)
+
+`reminders_gedateerd.json` koppelt een datum aan vijf berichten (slot 0 t/m 4), elk met `text` (het volledige bericht) en `thema`:
+
+    { "2026-12-01": [ {"text": "...", "thema": "..."}, ... 5 stuks ... ], ... }
+
+Staat de datum van vandaag (Europe/Amsterdam) erin, dan gaat het bericht van het actieve slot als platte tekst naar Telegram. Anders, of als dat bericht onbruikbaar is (ontbreekt, leeg, langer dan 4096 tekens, of met een niet ingevulde `[... invullen]`), geldt de rotatie uit `reminders.json`. Slots, `.last_sent.json` en de dubbel-check werken ongewijzigd: een gemist slot wordt niet ingehaald.
+
+Het bestand wordt gemaakt uit de markdown-bronnen (codeblok per bericht onder een kop `### 12. Dag 3, 13:00`; `### N1.` t/m `### N30.` tellen vanaf 25 november, gewone nummers vanaf 1 december):
+
+    python scripts/maak_gedateerd.py nov.md proefweek.md dec8-19.md dec20-31.md --vereis-volledig
+
+Vooraf bekijken zonder iets te versturen:
+
+    python send_reminder.py --dry-run --date 2026-12-01 --slot 0
+    python send_reminder.py --dry-run --date 2026-12-01        # alle vijf slots
+
 ## Handmatig triggeren (testen)
 
 1. Ga in GitHub naar **Actions** → **Send Islamic Reminder**.
