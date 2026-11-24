@@ -41,6 +41,10 @@ Het bestand wordt gemaakt uit de markdown-bronnen (codeblok per bericht onder ee
 
     python scripts/maak_gedateerd.py nov.md proefweek.md dec8-19.md dec20-31.md --vereis-volledig
 
+Doorlopend (alle blokken achter elkaar vanaf een startdatum, 10:00; datums in de koppen tellen dan niet):
+
+    python scripts/maak_gedateerd.py nov.md proefweek.md dec8-19.md dec20-31.md --doorlopend --start 2026-11-24
+
 Vooraf bekijken zonder iets te versturen:
 
     python send_reminder.py --dry-run --date 2026-12-01 --slot 0

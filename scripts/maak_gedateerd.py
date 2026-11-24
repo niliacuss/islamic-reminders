@@ -16,14 +16,24 @@ Staan er ook "Dag X", een datum of een tijd in de kop, dan moeten die kloppen
 met het nummer; anders stopt het script met een foutmelding. "Dag 1" is de
 eerste dag van de reeks (bij N: 25 november, zonder letter: 1 december).
 
+Doorlopende modus (--doorlopend --start 2026-11-24): alle reminder-blokken
+krijgen in bestandsvolgorde, en daarbinnen in volgorde van de koppen,
+opeenvolgende slots vanaf --start 10:00 (per dag 10, 13, 16, 19, 22 uur).
+Nummers en datums in de koppen tellen dan niet. Eindigt de reeks voor --tot,
+dan geldt daarna de rotatie (waarschuwing); loopt hij verder dan --tot, dan
+stopt het script met een fout.
+
 Gebruik (geef altijd ALLE bronbestanden tegelijk mee; het uitvoerbestand wordt
 volledig overschreven):
 
     python scripts/maak_gedateerd.py nov.md proefweek.md dec8-19.md dec20-31.md --vereis-volledig
+    python scripts/maak_gedateerd.py nov.md proefweek.md dec8-19.md dec20-31.md --doorlopend --start 2026-11-24
 
 Opties:
     --uit PAD                 uitvoerbestand (standaard: reminders_gedateerd.json in de repo)
-    --van / --tot DATUM       toegestane periode (standaard 2026-11-25 t/m 2026-12-31)
+    --doorlopend --start DATUM   doorlopende modus (vroegste start 2026-11-24)
+    --van / --tot DATUM       toegestane periode (standaard 2026-11-25 t/m 2026-12-31;
+                              bij --doorlopend vanaf --start)
     --vereis-volledig         fout als er in die periode een dag ontbreekt
     --sta-placeholders-toe    alleen voor tests: "[... invullen]" niet als fout zien
     --alleen-controleren      niets schrijven, alleen controleren
@@ -50,6 +60,8 @@ SLOT_TIMES = ("10:00", "13:00", "16:00", "19:00", "22:00")
 TIME_TO_SLOT = {(10, 0): 0, (13, 0): 1, (16, 0): 2, (19, 0): 3, (22, 0): 4}
 TELEGRAM_MAX_LEN = 4096
 DEFAULT_SERIES = {"N": date(2026, 11, 25), "": date(2026, 12, 1)}
+DEFAULT_VAN = date(2026, 11, 25)  # gewone modus
+DEFAULT_VAN_DOORLOPEND = date(2026, 11, 24)  # vroegste --start bij --doorlopend
 
 # Zelfde patroon als in send_reminder.py.
 PLACEHOLDER_RE = re.compile(
@@ -260,18 +272,34 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("bronnen", nargs="+", type=Path, help="markdown-bestanden")
     parser.add_argument("--uit", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--van", type=date.fromisoformat, default=date(2026, 11, 25))
+    parser.add_argument("--van", type=date.fromisoformat, default=None)
     parser.add_argument("--tot", type=date.fromisoformat, default=date(2026, 12, 31))
     parser.add_argument("--vereis-volledig", action="store_true")
     parser.add_argument("--sta-placeholders-toe", action="store_true")
     parser.add_argument("--alleen-controleren", action="store_true")
     parser.add_argument("--toon", action="store_true")
     parser.add_argument("--reeks", action="append", default=[], metavar="LETTER=DATUM")
+    parser.add_argument("--doorlopend", action="store_true")
+    parser.add_argument("--start", type=date.fromisoformat, default=None)
     args = parser.parse_args(argv)
     try:
         series = parse_series(args.reeks)
     except (argparse.ArgumentTypeError, ValueError) as e:
         parser.error(str(e))
+    if args.doorlopend:
+        if args.start is None:
+            parser.error("--doorlopend heeft --start JJJJ-MM-DD nodig")
+        earliest = args.van or DEFAULT_VAN_DOORLOPEND
+        if not (earliest <= args.start <= args.tot):
+            parser.error(
+                f"--start {args.start} valt buiten {earliest} t/m {args.tot}"
+            )
+        args.van = args.start
+        print(f"Doorlopende modus vanaf {args.start} 10:00: nummers en datums in de koppen worden genegeerd.")
+    else:
+        if args.start is not None:
+            parser.error("--start werkt alleen samen met --doorlopend")
+        args.van = args.van or DEFAULT_VAN
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -282,43 +310,19 @@ def main(argv: list[str] | None = None) -> int:
             continue
         headings.extend(read_source(path, errors, warnings))
 
-    seen_labels: dict[str, Heading] = {}
-    by_slot: dict[tuple[date, int], tuple[Heading, dict]] = {}
-    placeholders = 0
-    for h in headings:
-        if h.number is not None:
-            if h.label in seen_labels:
-                errors.append(f"{h.where}: nummer {h.label} komt ook voor in {seen_labels[h.label].where}")
-                continue
-            seen_labels[h.label] = h
-        if h.block is None:
-            errors.append(f"{h.where}: geen codeblok onder deze kop")
-            continue
-        try:
-            day, slot = resolve(h, series, args.van.year)
-        except ValueError as e:
-            errors.append(f"{h.where}: {e}")
-            continue
-        if not (args.van <= day <= args.tot):
-            errors.append(
-                f"{h.where}: valt op {day.isoformat()}, buiten {args.van.isoformat()}"
-                f" t/m {args.tot.isoformat()}"
-            )
-            continue
-        if (day, slot) in by_slot:
-            other = by_slot[(day, slot)][0]
-            errors.append(f"{h.where}: {day} {SLOT_TIMES[slot]} is al bezet door {other.where}")
-            continue
+    counter = {"placeholders": 0}
 
+    def make_entry(h: Heading) -> dict | None:
+        """Controleer de tekst van een kop en maak het JSON-object (of None)."""
         text = clean_block(h.block)
         if not text:
             errors.append(f"{h.where}: codeblok is leeg")
-            continue
+            return None
         length = telegram_length(text)
         if length > TELEGRAM_MAX_LEN:
             errors.append(f"{h.where}: {length} tekens, Telegram staat max {TELEGRAM_MAX_LEN} toe")
         for m in PLACEHOLDER_RE.finditer(text):
-            placeholders += 1
+            counter["placeholders"] += 1
             msg = f"{h.where}: placeholder {m[0]}"
             (warnings if args.sta_placeholders_toe else errors).append(msg)
         if any(dash in text for dash in DASHES):
@@ -327,15 +331,70 @@ def main(argv: list[str] | None = None) -> int:
         thema = thema_match.group(1).strip() if thema_match else ""
         if not thema:
             warnings.append(f"{h.where}: geen regel 'Thema:' gevonden")
-        by_slot[(day, slot)] = (h, {"text": text, "thema": thema})
+        return {"text": text, "thema": thema}
+
+    seen_labels: dict[str, Heading] = {}
+    by_slot: dict[tuple[date, int], tuple[Heading, dict]] = {}
+    position = 0  # alleen voor --doorlopend
+    for h in headings:
+        if h.number is not None:
+            if h.label in seen_labels:
+                msg = f"{h.where}: nummer {h.label} komt ook voor in {seen_labels[h.label].where}"
+                if not args.doorlopend:
+                    errors.append(msg)
+                    continue
+                warnings.append(msg)
+            seen_labels[h.label] = h
+        if h.block is None:
+            errors.append(f"{h.where}: geen codeblok onder deze kop")
+            continue
+
+        if args.doorlopend:
+            # Volgorde van bestanden en koppen; nummers en datums in de kop tellen niet.
+            day = args.start + timedelta(days=position // SLOTS_PER_DAY)
+            slot = position % SLOTS_PER_DAY
+            position += 1
+            if day > args.tot:
+                errors.append(
+                    f"{h.where}: zou op {day.isoformat()} {SLOT_TIMES[slot]} vallen,"
+                    f" na {args.tot.isoformat()}: reeks is te lang"
+                )
+                continue
+        else:
+            try:
+                day, slot = resolve(h, series, args.van.year)
+            except ValueError as e:
+                errors.append(f"{h.where}: {e}")
+                continue
+            if not (args.van <= day <= args.tot):
+                errors.append(
+                    f"{h.where}: valt op {day.isoformat()}, buiten {args.van.isoformat()}"
+                    f" t/m {args.tot.isoformat()}"
+                )
+                continue
+            if (day, slot) in by_slot:
+                other = by_slot[(day, slot)][0]
+                errors.append(f"{h.where}: {day} {SLOT_TIMES[slot]} is al bezet door {other.where}")
+                continue
+
+        entry = make_entry(h)
+        if entry is not None:
+            by_slot[(day, slot)] = (h, entry)
+    placeholders = counter["placeholders"]
 
     days: dict[date, dict[int, tuple[Heading, dict]]] = {}
     for (day, slot), item in by_slot.items():
         days.setdefault(day, {})[slot] = item
+    last_day = max(days) if days else None
     for day, slots in sorted(days.items()):
         missing = [SLOT_TIMES[s] for s in range(SLOTS_PER_DAY) if s not in slots]
-        if missing:
-            errors.append(f"{day.isoformat()}: onvolledig, ontbreekt {', '.join(missing)}")
+        if not missing:
+            continue
+        msg = f"{day.isoformat()}: onvolledig, ontbreekt {', '.join(missing)}"
+        if args.doorlopend and day == last_day:
+            warnings.append(msg + " (daar geldt de oude rotatie)")
+        else:
+            errors.append(msg)
 
     total_days = (args.tot - args.van).days + 1
     missing_days = [
@@ -374,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     out = {
-        day.isoformat(): [slots[s][1] for s in range(SLOTS_PER_DAY)]
+        day.isoformat(): [slots[s][1] for s in range(SLOTS_PER_DAY) if s in slots]
         for day, slots in sorted(days.items())
     }
     tmp = args.uit.with_name(args.uit.name + ".tmp")
