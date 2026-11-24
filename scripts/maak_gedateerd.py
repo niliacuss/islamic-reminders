@@ -10,6 +10,11 @@ Elk bericht staat in een codeblok (```) direct onder een kop zoals:
 
 Tekst buiten het codeblok (zoals de regel "Bron:") wordt niet meegenomen.
 
+Het du'a-blok (vanaf de regel met 🤲, bv. "🤲 Du'aa:") krijgt vaste witregels,
+zodat het in Telegram niet op elkaar staat (zie formatteer_dua): een witregel
+voor de kop, en tussen kop, Arabische tekst, "Transliteratie:" en "Vertaling:"
+telkens een witregel; de labels staan op een eigen regel met de tekst eronder.
+
 Datum en slot volgen uit het nummer: nummer k in een reeks met startdatum S
 geeft dag S + (k-1) // 5 en slot (k-1) % 5 (slot 0-4 = 10, 13, 16, 19, 22 uur).
 Staan er ook "Dag X", een datum of een tijd in de kop, dan moeten die kloppen
@@ -87,11 +92,67 @@ MONTH_DATE_RE = re.compile(
 )
 THEMA_RE = re.compile(r"Thema:\s*(.+)")
 DASHES = ("—", "–")  # em dash, en dash
+DUA_KOP = "🤲"
+DUA_KOP_RE = re.compile(r"^(" + DUA_KOP + r"[^:\n]*:)[ \t]*(.*)$")  # "🤲 Du'aa:" (+ tekst)
+DUA_LABEL_RE = re.compile(r"^(Transliteratie|Vertaling)[ \t]*:[ \t]*(.*)$", re.IGNORECASE)
 
 
 def telegram_length(text: str) -> int:
     """Lengte zoals Telegram telt (UTF-16; de meeste emoji tellen als 2)."""
     return len(text.encode("utf-16-le")) // 2
+
+
+def formatteer_dua(text: str) -> str:
+    """Zet vaste witregels in het du'a-blok, zodat het in Telegram ademt.
+
+    Het blok begint bij de eerste regel die met 🤲 begint en loopt tot het
+    einde van de tekst. Resultaat:
+
+        <reflectie>
+
+        🤲 Du'aa:
+
+        <Arabische tekst>
+
+        Transliteratie:
+        <transliteratie>
+
+        Vertaling:
+        <vertaling>
+
+    Alleen witruimte verandert (regels zonder label blijven bij het onderdeel
+    erboven). Tekst zonder 🤲-regel blijft ongewijzigd, en twee keer toepassen
+    geeft hetzelfde resultaat.
+    """
+    lines = text.split("\n")
+    kop_index = next(
+        (i for i, line in enumerate(lines) if line.lstrip().startswith(DUA_KOP)), None
+    )
+    if kop_index is None:
+        return text
+    voor = "\n".join(lines[:kop_index]).rstrip()
+    kop = lines[kop_index].strip()
+    delen: list[list[str]] = []
+    kop_match = DUA_KOP_RE.match(kop)
+    if kop_match and kop_match.group(2):  # tekst op dezelfde regel als de kop
+        kop = kop_match.group(1)
+        delen.append([kop_match.group(2)])
+    for line in lines[kop_index + 1 :]:
+        line = line.strip()
+        if not line:
+            continue
+        label = DUA_LABEL_RE.match(line)
+        if label:
+            deel = [label.group(1) + ":"]
+            if label.group(2):
+                deel.append(label.group(2))
+            delen.append(deel)
+        elif delen:
+            delen[-1].append(line)
+        else:
+            delen.append([line])
+    blok = "\n\n".join([kop] + ["\n".join(deel) for deel in delen])
+    return f"{voor}\n\n{blok}" if voor else blok
 
 
 def parse_date_in(text: str, default_year: int) -> tuple[date | None, str]:
@@ -314,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def make_entry(h: Heading) -> dict | None:
         """Controleer de tekst van een kop en maak het JSON-object (of None)."""
-        text = clean_block(h.block)
+        text = formatteer_dua(clean_block(h.block))
         if not text:
             errors.append(f"{h.where}: codeblok is leeg")
             return None
